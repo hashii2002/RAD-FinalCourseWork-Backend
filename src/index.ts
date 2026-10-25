@@ -1,17 +1,21 @@
+import "dotenv/config";
 import express from "express";
+import healthRoutes from "./routes/health.routes";
+import connectDB from "./config/db";
+import "dotenv/config";
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
+app.use("/api", healthRoutes);
 
-app.get("/", (_req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Welcome to PawPath Backend API!",
+
+const startServer = async (): Promise<void> => {
+  await connectDB();
+
+  app.listen(PORT, () => {
+    console.log(`PawPath server is running on port ${PORT}`);
   });
-});
-
-app.listen(PORT, () => {
-  console.log(`PawPath server is running on port ${PORT}`);
-});
+};
+startServer();
