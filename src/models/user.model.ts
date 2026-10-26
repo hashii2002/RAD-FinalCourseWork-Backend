@@ -2,6 +2,7 @@
 import { Schema, model } from "mongoose";
 
 export interface IUser {
+  userId: string;
   name: string;
   email: string;
   password: string;
@@ -11,6 +12,12 @@ export interface IUser {
 
 const userSchema = new Schema<IUser>(
   {
+    userId: {
+      type: String,
+      required: [true, "User ID is required"],
+      trim: true,
+    },
+
     name: {
       type: String,
       required: [true, "Name is required"],
@@ -51,6 +58,14 @@ const userSchema = new Schema<IUser>(
   },
   {
     timestamps: true,
+  }
+);
+
+userSchema.index(
+  { userId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { userId: { $type: "string" } },
   }
 );
 
