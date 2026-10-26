@@ -1,6 +1,5 @@
 
 import { Router } from "express";
-
 import {
   createTrainingProgram,
   getAllTrainingPrograms,
@@ -9,16 +8,18 @@ import {
   deleteTrainingProgram,
 } from "../controllers/trainingProgram.controller";
 
+import {authenticateToken, authorizeRoles,} from "../middleware/auth.middleware";
+
 const router = Router();
 
-router.post("/", createTrainingProgram);
+router.get("/", authenticateToken, getAllTrainingPrograms);
 
-router.get("/", getAllTrainingPrograms);
+router.get("/:id", authenticateToken, getTrainingProgramById);
 
-router.get("/:id", getTrainingProgramById);
+router.post( "/", authenticateToken, authorizeRoles("ADMIN"), createTrainingProgram);
 
-router.put("/:id", updateTrainingProgram);
+router.put("/:id",authenticateToken, authorizeRoles("ADMIN"), updateTrainingProgram);
 
-router.delete("/:id", deleteTrainingProgram);
+router.delete( "/:id", authenticateToken, authorizeRoles("ADMIN"), deleteTrainingProgram);
 
 export default router;

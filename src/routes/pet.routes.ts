@@ -1,24 +1,18 @@
 
 import { Router } from "express";
-
-import {
-  createPet,
-  getAllPets,
-  getPetById,
-  updatePet,
-  deletePet,
-} from "../controllers/pet.controller";
+import {createPet, getAllPets, getPetById, updatePet, deletePet,} from "../controllers/pet.controller";
+import {authenticateToken, authorizeRoles,} from "../middleware/auth.middleware";
 
 const router = Router();
 
-router.post("/", createPet);
+router.get("/", authenticateToken, getAllPets);
 
-router.get("/", getAllPets);
+router.get("/:id", authenticateToken, getPetById);
 
-router.get("/:id", getPetById);
+router.post("/", authenticateToken, authorizeRoles("ADMIN"), createPet);
 
-router.put("/:id", updatePet);
+router.put("/:id",authenticateToken, authorizeRoles("ADMIN"), updatePet);
 
-router.delete("/:id", deletePet);
+router.delete( "/:id", authenticateToken, authorizeRoles("ADMIN"), deletePet);
 
 export default router;
