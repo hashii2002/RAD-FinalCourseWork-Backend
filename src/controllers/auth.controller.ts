@@ -168,13 +168,10 @@ export const getCurrentUser = async (
   res: Response
 ): Promise<void> => {
   try {
-    // Get the user ID from the verified JWT token
     const authenticatedUser = req.user as AuthenticatedUser;
 
-    // Find the user in the database without selecting the password
     const user = await User.findById(authenticatedUser.userId);
 
-    // Check whether the user still exists
     if (!user) {
       res.status(404).json({
         success: false,
@@ -182,8 +179,6 @@ export const getCurrentUser = async (
       });
       return;
     }
-
-    // Do not allow inactive accounts to access their profile
     if (!user.isActive) {
       res.status(403).json({
         success: false,
@@ -192,7 +187,6 @@ export const getCurrentUser = async (
       return;
     }
 
-    // Return only safe user information
     res.status(200).json({
       success: true,
       message: "User profile retrieved successfully",
