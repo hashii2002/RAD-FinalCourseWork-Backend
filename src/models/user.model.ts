@@ -1,4 +1,3 @@
-
 import { Schema, model } from "mongoose";
 
 export interface IUser {
@@ -8,6 +7,8 @@ export interface IUser {
   password: string;
   role: "ADMIN" | "TRAINER" | "CUSTOMER";
   isActive: boolean;
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
 }
 
 const userSchema = new Schema<IUser>(
@@ -55,6 +56,16 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: true,
     },
+
+    resetPasswordToken: {
+      type: String,
+      select: false,
+    },
+
+    resetPasswordExpires: {
+      type: Date,
+      select: false,
+    },
   },
   {
     timestamps: true,
@@ -72,3 +83,4 @@ userSchema.index(
 const User = model<IUser>("User", userSchema, "users");
 
 export default User;
+

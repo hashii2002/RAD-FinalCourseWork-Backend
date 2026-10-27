@@ -1,9 +1,7 @@
-
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/user.model";
-
-type UserRole = "ADMIN" | "TRAINER" | "CUSTOMER";
+import { generateUserId, UserRole } from "../utils/userId.util";
 
 const validRoles: UserRole[] = ["ADMIN", "TRAINER", "CUSTOMER"];
 
@@ -36,7 +34,9 @@ export const getUserById = async (
   res: Response
 ): Promise<void> => {
   try {
-    const user = await User.findById(req.params.id).select("-password");
+    const user = await User.findOne({
+      userId: req.params.id,
+    }).select("-password");
 
     if (!user) {
       res.status(404).json({
@@ -68,9 +68,10 @@ export const createUser = async (
     const { name, email, password, role } = req.body;
 
     if (
-      typeof name !== "string" || !name.trim() ||
-      typeof email !== "string" || !email.trim() ||
-      typeof password !== "string" || !password) {
+      typeof name !== "string" ||!name.trim() ||
+      typeof email !== "string" ||!email.trim() ||
+      typeof password !== "string" ||!password
+    ) {
       res.status(400).json({
         success: false,
         message: "Name, email, and password are required",
@@ -94,6 +95,7 @@ export const createUser = async (
       return;
     }
 
+    const selectedRole = role as UserRole;
     const normalizedEmail = email.trim().toLowerCase();
 
     const existingUser = await User.findOne({
@@ -107,13 +109,16 @@ export const createUser = async (
       });
       return;
     }
+
+    const userId = await generateUserId(selectedRole);
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const user = await User.create({
+      userId,
       name: name.trim(),
       email: normalizedEmail,
       password: hashedPassword,
-      role: role as UserRole,
+      role: selectedRole,
       isActive: true,
     });
 
@@ -121,6 +126,7 @@ export const createUser = async (
       success: true,
       message: "User created successfully",
       data: {
+        userId: user.userId,
         id: String(user._id),
         name: user.name,
         email: user.email,
@@ -129,16 +135,11 @@ export const createUser = async (
       },
     });
   } catch (error) {
-
     if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === 11000
-    ) {
+      typeof error === "object" && error !== null && "code" in error && error.code === 11000) {
       res.status(409).json({
         success: false,
-        message: "This email is already registered",
+        message: "This email or User ID is already registered",
       });
       return;
     }
@@ -158,11 +159,23 @@ export const updateUser = async (
 ): Promise<void> => {
   try {
     const { name, email, role, isActive } = req.body;
+    const existingUser = await User.findOne({
+      userId: req.params.id,
+    });
+
+    if (!existingUser) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+      return;
+    }
 
     const updates: {
       name?: string;
       email?: string;
       role?: UserRole;
+      userId?: string;
       isActive?: boolean;
     } = {};
 
@@ -199,7 +212,12 @@ export const updateUser = async (
         return;
       }
 
-      updates.role = role as UserRole;
+      const newRole = role as UserRole;
+      updates.role = newRole;
+
+      if (newRole !== existingUser.role) {
+        updates.userId = await generateUserId(newRole);
+      }
     }
 
     if (isActive !== undefined) {
@@ -222,11 +240,11 @@ export const updateUser = async (
       return;
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
+    const user = await User.findOneAndUpdate(
+      { userId: req.params.id },
       { $set: updates },
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       }
     ).select("-password");
@@ -246,14 +264,10 @@ export const updateUser = async (
     });
   } catch (error) {
     if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === 11000
-    ) {
+      typeof error === "object" &&  error !== null &&  "code" in error &&  error.code === 11000) {
       res.status(409).json({
         success: false,
-        message: "This email is already registered",
+        message: "This email or User ID is already registered",
       });
       return;
     }
