@@ -193,3 +193,118 @@ export const deletePet = async (
   }
 };
 
+
+export const searchPets = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      name,
+      species,
+      breed,
+      status,
+      minPrice,
+      maxPrice,
+    } = req.query;
+
+    const filter: Record<string, unknown> = {};
+
+    if (typeof name === "string" && name.trim()) {
+      filter.name = {
+        $regex: name.trim(),
+        $options: "i",
+      };
+    }
+
+    if (typeof species === "string" && species.trim()) {
+      filter.species = {
+        $regex: species.trim(),
+        $options: "i",
+      };
+    }
+
+    if (typeof breed === "string" && breed.trim()) {
+      filter.breed = {
+        $regex: breed.trim(),
+        $options: "i",
+      };
+    }
+
+    const validStatuses = ["AVAILABLE", "SOLD", "RESERVED"];
+
+    if (typeof status === "string") {
+      if (!validStatuses.includes(status)) {
+        res.status(400).json({
+          success: false,
+          message: "Status must be AVAILABLE, SOLD, or RESERVED",
+        });
+        return;
+      }
+
+      filter.status = status;
+    }
+
+    const priceFilter: { $gte?: number; $lte?: number } = {};
+
+    if (minPrice !== undefined) {
+      const minimum = Number(minPrice);
+
+      if (
+        typeof minPrice !== "string" || minPrice.trim() === "" || !Number.isFinite(minimum) || minimum < 0) {
+        res.status(400).json({
+          success: false,
+          message: "minPrice must be a valid non-negative number",
+        });
+        return;
+      }
+
+      priceFilter.$gte = minimum;
+    }
+
+    if (maxPrice !== undefined) {
+      const maximum = Number(maxPrice);
+
+      if (
+        typeof maxPrice !== "string" ||  maxPrice.trim() === "" || !Number.isFinite(maximum) || maximum < 0) {
+        res.status(400).json({
+          success: false,
+          message: "maxPrice must be a valid non-negative number",
+        });
+        return;
+      }
+
+      priceFilter.$lte = maximum;
+    }
+
+    if (
+      priceFilter.$gte !== undefined &&
+      priceFilter.$lte !== undefined &&
+      priceFilter.$gte > priceFilter.$lte
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "minPrice cannot be greater than maxPrice",
+      });
+      return;
+    }
+
+    if (Object.keys(priceFilter).length > 0) {
+      filter.price = priceFilter;
+    }
+
+    const pets = await Pet.find(filter).sort({ _id: 1 });
+
+    res.status(200).json({
+      success: true,
+      count: pets.length,
+      data: pets,
+    });
+  } catch (error) {
+    console.error("Search pets error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to search pets",
+    });
+  }
+};
+
+

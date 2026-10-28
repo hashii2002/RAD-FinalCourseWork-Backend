@@ -5,6 +5,7 @@ import petRoutes from "./routes/pet.routes";
 import trainingProgramRoutes from "./routes/trainingProgram.routes";
 import authRoutes from "./routes/auth.routes";
 import userRoutes from "./routes/user.routes";
+import petOrderRoutes from "./routes/pet-order.routes";
 import connectDB from "./config/db";
 
 const app = express();
@@ -17,7 +18,7 @@ app.use("/api/pets", petRoutes);
 app.use("/api/training-programs", trainingProgramRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
-
+app.use("/api/pet-orders", petOrderRoutes);
 
 const startServer = async (): Promise<void> => {
   await connectDB();
