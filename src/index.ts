@@ -10,6 +10,7 @@ import companyContactRoutes from "./routes/company-contact.routes";
 import trainingBookingRoutes from "./routes/training-booking.routes";
 import trainingSessionRoutes from "./routes/training-session.routes";
 import analyticsRoutes from "./routes/analytics.routes";
+import paymentRoutes from "./routes/payment.routes";
 import connectDB from "./config/db";
 
 const app = express();
@@ -27,6 +28,7 @@ app.use("/api/company-contact", companyContactRoutes);
 app.use("/api/training-bookings", trainingBookingRoutes);
 app.use("/api/training-sessions", trainingSessionRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/payments", paymentRoutes);
 
 const startServer = async (): Promise<void> => {
   await connectDB();
