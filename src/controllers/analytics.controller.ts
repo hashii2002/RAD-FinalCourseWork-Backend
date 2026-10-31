@@ -3,6 +3,7 @@ import Pet from "../models/pet.model";
 import PetOrder from "../models/pet-order.model";
 import TrainingProgram from "../models/trainingProgram.model";
 import TrainingBooking from "../models/training-booking.model";
+import Payment from "../models/payment.model";
 import User from "../models/user.model";
 
 export const getDashboardAnalytics = async (
@@ -66,17 +67,53 @@ export const getDashboardAnalytics = async (
       TrainingBooking.countDocuments({ status: "COMPLETED" }),
     ]);
 
-    const salesResult = await Pet.aggregate([
-      { $match: { status: "SOLD" } },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: "$price" },
+    const [
+      totalPayments,
+      unpaidPayments,
+      partiallyPaidPayments,
+      paidPayments,
+      refundedPayments,
+      activePaymentSummary,
+    ] = await Promise.all([
+      Payment.countDocuments(),
+      Payment.countDocuments({ status: "UNPAID" }),
+      Payment.countDocuments({ status: "PARTIALLY_PAID" }),
+      Payment.countDocuments({ status: "PAID" }),
+      Payment.countDocuments({ status: "REFUNDED" }),
+
+      Payment.aggregate([
+      
+        { $match: { status: { $ne: "REFUNDED" } } },
+        {
+          $group: {
+            _id: "$paymentType",
+            totalPaid: { $sum: "$paidAmount" },
+            outstandingBalance: { $sum: "$balance" },
+            totalDiscount: { $sum: "$discount" },
+            paymentCount: { $sum: 1 },
+          },
         },
-      },
+      ]),
     ]);
 
-    const totalPetSalesValue = salesResult[0]?.totalRevenue ?? 0;
+    const petPaymentSummary = activePaymentSummary.find(
+      (item) => item._id === "PET_ORDER"
+    );
+
+    const trainingPaymentSummary = activePaymentSummary.find(
+      (item) => item._id === "TRAINING_BOOKING"
+    );
+
+    const petSalesCollected = petPaymentSummary?.totalPaid ?? 0;
+    const trainingFeesCollected = trainingPaymentSummary?.totalPaid ?? 0;
+
+    const totalCollectedRevenue =
+      petSalesCollected + trainingFeesCollected;
+
+    const totalOutstandingBalance = activePaymentSummary.reduce(
+      (sum, item) => sum + item.outstandingBalance,
+      0
+    );
 
     res.status(200).json({
       success: true,
@@ -105,9 +142,20 @@ export const getDashboardAnalytics = async (
           inProgress: inProgressTrainingBookings,
           completed: completedTrainingBookings,
         },
-        sales: {
-          totalPetSalesValue,
-          note: "Calculated from the listed prices of pets marked as SOLD; this is not a payment-verified revenue figure.",
+        payments: {
+          total: totalPayments,
+          unpaid: unpaidPayments,
+          partiallyPaid: partiallyPaidPayments,
+          paid: paidPayments,
+          refunded: refundedPayments,
+
+          petSalesCollected,
+          trainingFeesCollected,
+          totalCollectedRevenue,
+          totalOutstandingBalance,
+
+          note:
+            "Collected amounts exclude payment records marked as REFUNDED.",
         },
       },
     });
