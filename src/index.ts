@@ -12,6 +12,7 @@ import trainingSessionRoutes from "./routes/training-session.routes";
 import analyticsRoutes from "./routes/analytics.routes";
 import paymentRoutes from "./routes/payment.routes";
 import customerDashboardRoutes from "./routes/customer-dashboard.routes";
+import trainerDashboardRoutes from "./routes/trainer-dashboard.routes";
 import connectDB from "./config/db";
 
 const app = express();
@@ -31,6 +32,7 @@ app.use("/api/training-sessions", trainingSessionRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/customer-dashboard", customerDashboardRoutes);
+app.use("/api/trainer-dashboard", trainerDashboardRoutes);
 
 const startServer = async (): Promise<void> => {
   await connectDB();
