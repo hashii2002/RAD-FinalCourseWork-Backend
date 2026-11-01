@@ -16,6 +16,7 @@ import trainerDashboardRoutes from "./routes/trainer-dashboard.routes";
 import petSalesReportRoutes from "./routes/pet-sales-report.routes";
 import trainingReportRoutes from "./routes/training-report.routes";
 import paymentReportRoutes from "./routes/payment-report.routes";
+import systemSummaryReportRoutes from "./routes/system-summary-report.routes";
 import connectDB from "./config/db";
 
 const app = express();
@@ -39,6 +40,7 @@ app.use("/api/trainer-dashboard", trainerDashboardRoutes);
 app.use("/api/reports", petSalesReportRoutes);
 app.use("/api/reports", trainingReportRoutes);
 app.use("/api/reports", paymentReportRoutes);
+app.use("/api/reports", systemSummaryReportRoutes);
 
 const startServer = async (): Promise<void> => {
   await connectDB();
