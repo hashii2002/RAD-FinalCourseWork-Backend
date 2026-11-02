@@ -18,9 +18,18 @@ import trainingReportRoutes from "./routes/training-report.routes";
 import paymentReportRoutes from "./routes/payment-report.routes";
 import systemSummaryReportRoutes from "./routes/system-summary-report.routes";
 import connectDB from "./config/db";
+import cors from "cors";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 app.use(express.json());
 
