@@ -47,7 +47,6 @@ export const register = async (
     
   const hashedPassword = await bcrypt.hash(password, 12);
 
-  // Generate a unique ID for the new customer.
   const userId = await generateUserId("CUSTOMER");
 
   const user = await User.create({
@@ -338,11 +337,20 @@ export const forgotPassword = async (
       return;
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+
+    console.log("Forgot password request received");
+    console.log("Requested email:", normalizedEmail);
+
     const user = await User.findOne({
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
     });
 
+    console.log("User found:", !!user);
+    console.log("User active:", user?.isActive);
+
     if (!user || !user.isActive) {
+      console.log("Email not sent: User not found or inactive");
       res.status(200).json({
         success: true,
         message:
@@ -367,12 +375,18 @@ export const forgotPassword = async (
         user: emailUser,
         pass: emailPassword,
       },
+      logger: true,
+      debug: true,
     });
+
+    await transporter.verify();
+    console.log("Gmail SMTP connection successful");
 
     const resetLink =
       `${frontendUrl.replace(/\/$/, "")}/reset-password?token=${resetToken}`;
 
     try {
+
       await transporter.sendMail({
         from: `"PawPath" <${emailUser}>`,
         to: user.email,
