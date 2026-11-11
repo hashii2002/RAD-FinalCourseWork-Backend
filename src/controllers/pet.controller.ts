@@ -1,23 +1,25 @@
-
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 
 import Pet from "../models/pet.model";
 import Counter from "../models/counter.model";
+import uploadImageToCloudinary from "../services/image-upload.service";
 
 export const createPet = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
+    let imageUrl = req.body.imageUrl || "";
+
+    if (req.file) {
+      imageUrl = await uploadImageToCloudinary(req.file.buffer);
+    }
+
     const counter = await Counter.findOneAndUpdate(
       { _id: "petId" },
       { $inc: { seq: 1 } },
-      {
-        new: true,
-        upsert: true,
-        setDefaultsOnInsert: true,
-      }
+      { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
     const petId = `PET-${String(counter.seq).padStart(4, "0")}`;
@@ -25,6 +27,7 @@ export const createPet = async (
     const pet = await Pet.create({
       ...req.body,
       _id: petId,
+      imageUrl,
     });
 
     res.status(201).json({
@@ -40,6 +43,8 @@ export const createPet = async (
       });
       return;
     }
+
+    console.error("Create pet error:", error);
 
     res.status(500).json({
       success: false,
@@ -95,12 +100,12 @@ export const getPetById = async (
   }
 };
 
+
 export const updatePet = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-  
     const {
       name,
       species,
@@ -112,7 +117,7 @@ export const updatePet = async (
       status,
     } = req.body;
 
-    const updates = {
+    const updates: Record<string, unknown> = {
       name,
       species,
       breed,
@@ -123,13 +128,23 @@ export const updatePet = async (
       status,
     };
 
-    const filteredUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([, value]) => value !== undefined)
-    );
+    Object.keys(updates).forEach((key) => {
+      if (updates[key] === undefined) {
+        delete updates[key];
+      }
+    });
+
+    if (req.file) {
+      const uploadedImageUrl = await uploadImageToCloudinary(
+        req.file.buffer
+      );
+
+      updates.imageUrl = uploadedImageUrl;
+    }
 
     const pet = await Pet.findByIdAndUpdate(
       req.params.id,
-      { $set: filteredUpdates },
+      { $set: updates },
       {
         new: true,
         runValidators: true,
@@ -150,6 +165,8 @@ export const updatePet = async (
       data: pet,
     });
   } catch (error) {
+    console.error("Update pet error:", error);
+
     if (error instanceof mongoose.Error.ValidationError) {
       res.status(400).json({
         success: false,
