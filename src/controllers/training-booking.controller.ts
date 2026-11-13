@@ -20,7 +20,6 @@ export const createTrainingBooking = async (
       appointmentTime,
     } = req.body;
 
-    // Validate 
     if (
       typeof trainingProgramId !== "string" ||
       !trainingProgramId.trim() ||
@@ -418,10 +417,6 @@ export const assignTrainingTrainer = async (
   }
 };
 
-
-/**
- * Update the training progress of a booking assigned to the trainer.
- */
 export const updateTrainingProgress = async (
   req: Request,
   res: Response
@@ -569,6 +564,277 @@ export const updateTrainingProgress = async (
     });
   }
 };
+
+
+export const rejectTrainingBooking = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+
+    if (req.user?.role !== "ADMIN") {
+      res.status(403).json({
+        success: false,
+        message: "Only admins can reject training bookings",
+      });
+      return;
+    }
+
+    const { bookingId } = req.params;
+    const booking = await TrainingBooking.findOne({ bookingId });
+
+    if (!booking) {
+      res.status(404).json({
+        success: false,
+        message: "Training booking was not found",
+      });
+      return;
+    }
+
+    if (booking.status !== "PENDING") {
+      res.status(409).json({
+        success: false,
+        message: "Only pending bookings can be rejected",
+      });
+      return;
+    }
+
+    booking.status = "REJECTED";
+
+    await booking.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Training booking rejected successfully",
+      data: booking,
+    });
+  } catch (error) {
+    console.error("Reject training booking error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to reject training booking",
+    });
+  }
+};
+
+export const createTrainingBookingByAdmin = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+
+    if (req.user?.role !== "ADMIN") {
+      res.status(403).json({
+        success: false,
+        message: "Only admins can create training bookings",
+      });
+      return;
+    }
+
+    const authenticatedUserId = req.user?.userId;
+
+    if (!authenticatedUserId) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication is required",
+      });
+      return;
+    }
+
+    const admin = await User.findById(authenticatedUserId);
+
+    if (!admin || !admin.isActive || admin.role !== "ADMIN") {
+      res.status(401).json({
+        success: false,
+        message: "Active admin account was not found",
+      });
+      return;
+    }
+
+    const {
+      customerId,
+      trainingProgramId,
+      petName,
+      species,
+      breed,
+      ageMonths,
+      initialCondition,
+      appointmentDate,
+      appointmentTime,
+    } = req.body;
+
+    if (
+      typeof customerId !== "string" ||
+      !customerId.trim() ||
+      typeof trainingProgramId !== "string" ||
+      !trainingProgramId.trim() ||
+      typeof petName !== "string" ||
+      !petName.trim() ||
+      typeof species !== "string" ||
+      !species.trim() ||
+      typeof breed !== "string" ||
+      !breed.trim() ||
+      typeof ageMonths !== "number" ||
+      !Number.isInteger(ageMonths) ||
+      typeof initialCondition !== "string" ||
+      !initialCondition.trim() ||
+      typeof appointmentDate !== "string" ||
+      !appointmentDate.trim() ||
+      typeof appointmentTime !== "string" ||
+      !appointmentTime.trim()
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Please provide all required training booking details",
+      });
+      return;
+    }
+
+    if (ageMonths < 0 || ageMonths > 1200) {
+      res.status(400).json({
+        success: false,
+        message: "Pet age must be between 0 and 1200 months",
+      });
+      return;
+    }
+
+    if (
+      customerId.trim().length > 50 ||
+      petName.trim().length > 100 ||
+      species.trim().length > 100 ||
+      breed.trim().length > 100 ||
+      initialCondition.trim().length > 1000
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "One or more fields exceed the allowed length",
+      });
+      return;
+    }
+
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(appointmentTime)) {
+      res.status(400).json({
+        success: false,
+        message: "Appointment time must use HH:mm format",
+      });
+      return;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate)) {
+      res.status(400).json({
+        success: false,
+        message: "Appointment date must use YYYY-MM-DD format",
+      });
+      return;
+    }
+
+    const parsedDate = new Date(
+      `${appointmentDate}T00:00:00.000Z`
+    );
+
+    if (
+      Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== appointmentDate
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Please provide a valid appointment date",
+      });
+      return;
+    }
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    if (parsedDate < today) {
+      res.status(400).json({
+        success: false,
+        message: "Appointment date cannot be in the past",
+      });
+      return;
+    }
+
+    const customer = await User.findOne({
+      userId: customerId.trim(),
+      role: "CUSTOMER",
+      isActive: true,
+    });
+
+    if (!customer) {
+      res.status(404).json({
+        success: false,
+        message: "Active customer was not found",
+      });
+      return;
+    }
+
+    const program = await TrainingProgram.findById(
+      trainingProgramId.trim()
+    );
+
+    if (!program) {
+      res.status(404).json({
+        success: false,
+        message: "Training program was not found",
+      });
+      return;
+    }
+
+    if (program.status !== "ACTIVE") {
+      res.status(409).json({
+        success: false,
+        message: "This training program is not currently available",
+      });
+      return;
+    }
+
+    const counter = await Counter.findOneAndUpdate(
+      { _id: "trainingBookingId" },
+      { $inc: { seq: 1 } },
+      {
+        returnDocument: "after",
+        upsert: true,
+        setDefaultsOnInsert: true,
+      }
+    );
+
+    if (!counter) {
+      throw new Error("Unable to generate training booking ID");
+    }
+
+    const bookingId = `TRB-${String(counter.seq).padStart(4, "0")}`;
+
+    const booking = await TrainingBooking.create({
+      bookingId,
+      customerId: customer.userId,
+      trainingProgramId: program._id,
+      petName: petName.trim(),
+      species: species.trim(),
+      breed: breed.trim(),
+      ageMonths,
+      initialCondition: initialCondition.trim(),
+      appointmentDate: parsedDate,
+      appointmentTime,
+      progressPercentage: 0,
+      status: "PENDING",
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Training booking created successfully by admin",
+      data: booking,
+    });
+  } catch (error) {
+    console.error("Admin create training booking error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create training booking",
+    });
+  }
+};
+
 
 
 
