@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Request, Response } from "express";
 import PetOrder from "../models/pet-order.model";
 import Pet from "../models/pet.model";
@@ -201,13 +202,14 @@ export const getAllPetOrders = async (
   }
 };
 
-// Update a pet order status (Only Admin)
+
 export const updatePetOrderStatus = async (
   req: Request,
   res: Response
 ): Promise<void> => {
+  const session = await mongoose.startSession();
+
   try {
-   
     if (req.user?.role !== "ADMIN") {
       res.status(403).json({
         success: false,
@@ -220,159 +222,188 @@ export const updatePetOrderStatus = async (
     const { status } = req.body;
 
     const allowedStatuses = [
+      "PENDING",
       "CONTACTED",
       "APPROVED",
       "REJECTED",
       "CANCELLED",
     ];
 
-    if (
-      typeof status !== "string" ||
-      !allowedStatuses.includes(status)
-    ) {
+    if (!allowedStatuses.includes(status)) {
       res.status(400).json({
         success: false,
-        message: "Invalid order status",
+        message: "Invalid pet order status",
       });
       return;
     }
 
-    const order = await PetOrder.findOne({ orderId });
+    let updatedOrder: any = null;
+    let errorStatus = 500;
 
-    if (!order) {
-      res.status(404).json({
-        success: false,
-        message: "Pet order was not found",
-      });
-      return;
-    }
+    await session.withTransaction(async () => {
 
-    if (!["PENDING", "CONTACTED"].includes(order.status)) {
-      res.status(409).json({
-        success: false,
-        message: "This order has already been processed",
-      });
-      return;
-    }
+      const order = await PetOrder.findOne({ orderId }).session(session);
 
-    if (status === "APPROVED") {
+      if (!order) {
+        errorStatus = 404;
+        throw new Error("Pet order not found");
+      }
 
-      const existingApprovedOrder = await PetOrder.findOne({
-        petId: order.petId,
-        status: "APPROVED",
-        orderId: { $ne: order.orderId },
-      });
+      const previousStatus = order.status;
 
-      if (existingApprovedOrder) {
-        res.status(409).json({
-          success: false,
-          message: "Another order for this pet is already approved",
-        });
+      if (previousStatus === status) {
+        updatedOrder = order;
         return;
       }
 
-      const updatedPet = await Pet.findOneAndUpdate(
-        {
-          _id: order.petId,
-          status: "AVAILABLE",
-        },
-        {
-          $set: { status: "SOLD" },
-        },
-        {
-          returnDocument: "after",
+      const pet = await Pet.findById(order.petId).session(session);
+
+      if (!pet) {
+        errorStatus = 404;
+        throw new Error("Related pet not found");
+      }
+
+      if (status === "APPROVED") {
+        const existingApprovedOrder = await PetOrder.findOne({
+          petId: order.petId,
+          status: "APPROVED",
+          orderId: { $ne: orderId },
+        }).session(session);
+
+        if (existingApprovedOrder) {
+          errorStatus = 409;
+          throw new Error(
+            "Another approved order already exists for this pet"
+          );
         }
-      );
 
-      if (!updatedPet) {
-        res.status(409).json({
-          success: false,
-          message: "This pet is no longer available",
-        });
-        return;
+        if (previousStatus !== "APPROVED") {
+          if (pet.status !== "AVAILABLE") {
+            errorStatus = 409;
+            throw new Error(
+              "This pet is not available for approval"
+            );
+          }
+
+          const soldPet = await Pet.findOneAndUpdate(
+            {
+              _id: order.petId,
+              status: "AVAILABLE",
+            },
+            {
+              $set: { status: "SOLD" },
+            },
+            {
+              new: true,
+              session,
+            }
+          );
+
+          if (!soldPet) {
+            errorStatus = 409;
+            throw new Error(
+              "Pet availability changed. Please refresh and try again"
+            );
+          }
+        }
       }
 
-      try {
-        const updatedOrder = await PetOrder.findOneAndUpdate(
+      if (
+        previousStatus === "APPROVED" &&
+        status !== "APPROVED"
+      ) {
+        const availablePet = await Pet.findOneAndUpdate(
           {
-            orderId,
-            status: { $in: ["PENDING", "CONTACTED"] },
+            _id: order.petId,
+            status: "SOLD",
           },
           {
-            $set: { status: "APPROVED" },
+            $set: { status: "AVAILABLE" },
           },
           {
-            returnDocument: "after",
-            runValidators: true,
+            new: true,
+            session,
           }
         );
 
-        if (!updatedOrder) {
-  
-          await Pet.findOneAndUpdate(
-            { _id: order.petId, status: "SOLD" },
-            { $set: { status: "AVAILABLE" } }
+        if (!availablePet) {
+          errorStatus = 409;
+          throw new Error(
+            "Pet status could not be changed to AVAILABLE"
           );
-
-          res.status(409).json({
-            success: false,
-            message: "Order status changed. Please refresh and try again",
-          });
-          return;
         }
+      }
 
-        res.status(200).json({
-          success: true,
-          message: "Pet order approved successfully",
-          data: updatedOrder,
-        });
-        return;
-      } catch (error) {
-        await Pet.findOneAndUpdate(
-          { _id: order.petId, status: "SOLD" },
-          { $set: { status: "AVAILABLE" } }
+      updatedOrder = await PetOrder.findOneAndUpdate(
+        {
+          orderId,
+          status: previousStatus,
+        },
+        {
+          $set: { status },
+        },
+        {
+          new: true,
+          runValidators: true,
+          session,
+        }
+      );
+
+      if (!updatedOrder) {
+        errorStatus = 409;
+        throw new Error(
+          "Order status changed. Please refresh and try again"
         );
-
-        throw error;
       }
-    }
-
-    const updatedOrder = await PetOrder.findOneAndUpdate(
-      {
-        orderId,
-        status: { $in: ["PENDING", "CONTACTED"] },
-      },
-      {
-        $set: { status },
-      },
-      {
-        returnDocument: "after",
-        runValidators: true,
-      }
-    );
-
-    if (!updatedOrder) {
-      res.status(409).json({
-        success: false,
-        message: "Order status changed. Please refresh and try again",
-      });
-      return;
-    }
+    });
 
     res.status(200).json({
       success: true,
-      message: `Pet order status updated to ${status}`,
+      message: "Pet order status updated successfully",
       data: updatedOrder,
     });
   } catch (error) {
-    console.error("Update pet order status error:", error);
+    console.error("Update Pet Order Status Error:", error);
 
-    res.status(500).json({
+    res.status(
+      errorStatusForResponse(error, 500)
+    ).json({
       success: false,
-      message: "Failed to update pet order status",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to update pet order status",
     });
+  } finally {
+    await session.endSession();
   }
 };
+
+function errorStatusForResponse(
+  error: unknown,
+  defaultStatus: number
+): number {
+  if (error instanceof Error) {
+    if (error.message === "Pet order not found") return 404;
+    if (error.message === "Related pet not found") return 404;
+
+    if (
+      error.message ===
+        "Another approved order already exists for this pet" ||
+      error.message === "This pet is not available for approval" ||
+      error.message.startsWith("Pet availability changed") ||
+      error.message.startsWith("Pet status could not be changed") ||
+      error.message.startsWith("Order status changed")
+    ) {
+      return 409;
+    }
+
+    if (error.message === "Invalid pet order status") return 400;
+  }
+
+  return defaultStatus;
+}
+
 
 
 
