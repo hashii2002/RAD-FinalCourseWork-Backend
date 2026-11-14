@@ -219,6 +219,144 @@ export const getCurrentUser = async (
   }
 };
 
+export const updateCurrentUser = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const authenticatedUser = req.user as AuthenticatedUser;
+    const { name, email } = req.body;
+
+    const updates: {
+      name?: string;
+      email?: string;
+    } = {};
+
+    if (name !== undefined) {
+      if (typeof name !== "string" || !name.trim()) {
+        res.status(400).json({
+          success: false,
+          message: "Name must be a non-empty string",
+        });
+        return;
+      }
+
+      if (name.trim().length < 2 || name.trim().length > 100) {
+        res.status(400).json({
+          success: false,
+          message: "Name must contain 2 to 100 characters",
+        });
+        return;
+      }
+
+      updates.name = name.trim();
+    }
+
+    if (email !== undefined) {
+      if (typeof email !== "string" || !email.trim()) {
+        res.status(400).json({
+          success: false,
+          message: "Email must be a non-empty string",
+        });
+        return;
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (!emailRegex.test(normalizedEmail)) {
+        res.status(400).json({
+          success: false,
+          message: "Please provide a valid email address",
+        });
+        return;
+      }
+
+      const existingUser = await User.findOne({
+        email: normalizedEmail,
+        _id: { $ne: authenticatedUser.userId },
+      });
+
+      if (existingUser) {
+        res.status(409).json({
+          success: false,
+          message: "This email is already registered",
+        });
+        return;
+      }
+
+      updates.email = normalizedEmail;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({
+        success: false,
+        message: "At least one profile field is required",
+      });
+      return;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      authenticatedUser.userId,
+      { $set: updates },
+      {
+        returnDocument: "after",
+        runValidators: true,
+      }
+    ).select("-password");
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+      return;
+    }
+
+    if (!user.isActive) {
+      res.status(403).json({
+        success: false,
+        message: "This account is inactive",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: {
+        id: String(user._id),
+        userId: user.userId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+      },
+    });
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === 11000
+    ) {
+      res.status(409).json({
+        success: false,
+        message: "This email is already registered",
+      });
+      return;
+    }
+
+    console.error("Update current user error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update profile",
+    });
+  }
+};
+
 export const changePassword = async (
   req: Request,
   res: Response
