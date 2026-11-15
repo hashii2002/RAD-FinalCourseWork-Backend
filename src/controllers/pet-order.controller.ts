@@ -154,10 +154,41 @@ export const getMyPetOrders = async (
       customerId: customer.userId,
     }).sort({ createdAt: -1 });
 
+    const petIds = orders.map((order) => order.petId);
+
+    const pets = await Pet.find({
+      _id: { $in: petIds },
+    });
+
+    const petMap = new Map(
+      pets.map((pet) => [String(pet._id), pet])
+    );
+
+    const ordersWithPetDetails = orders.map((order) => {
+      const orderData = order.toObject();
+      const relatedPet = petMap.get(String(order.petId));
+
+      return {
+        ...orderData,
+        pet: relatedPet
+          ? {
+              _id: relatedPet._id,
+              name: relatedPet.name,
+              species: relatedPet.species,
+              breed: relatedPet.breed,
+              ageMonths: relatedPet.ageMonths,
+              price: relatedPet.price,
+              imageUrl: relatedPet.imageUrl,
+              status: relatedPet.status,
+            }
+          : null,
+      };
+    });
+
     res.status(200).json({
       success: true,
-      count: orders.length,
-      data: orders,
+      count: ordersWithPetDetails.length,
+      data: ordersWithPetDetails,
     });
   } catch (error) {
     console.error("Get customer pet orders error:", error);
