@@ -165,19 +165,17 @@ export const updatePet = async (
       data: pet,
     });
   } catch (error) {
-    console.error("Update pet error:", error);
+    console.error("Update Pet Error Details:", error);
 
-    if (error instanceof mongoose.Error.ValidationError) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-      return;
-    }
+    const errorDetails =
+      error instanceof Error
+        ? error.message
+        : JSON.stringify(error, Object.getOwnPropertyNames(error));
 
     res.status(500).json({
       success: false,
       message: "Failed to update pet",
+      error: errorDetails,
     });
   }
 };
@@ -323,5 +321,6 @@ export const searchPets = async (req: Request, res: Response): Promise<void> => 
     });
   }
 };
+
 
 
