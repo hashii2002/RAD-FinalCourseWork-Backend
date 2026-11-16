@@ -27,7 +27,12 @@ const app = express();
 // CORS Configuration
 app.use(
   cors({
-    origin: true,
+    origin: [
+      "https://rad-final-project-frontend-five.vercel.app", 
+      "http://localhost:5173", // Vite/React default port
+      "http://localhost:3000"
+    ],
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
