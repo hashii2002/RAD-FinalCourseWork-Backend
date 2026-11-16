@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+import cors from "cors";
+
 import healthRoutes from "./routes/health.routes";
 import petRoutes from "./routes/pet.routes";
 import trainingProgramRoutes from "./routes/trainingProgram.routes";
@@ -17,12 +19,12 @@ import petSalesReportRoutes from "./routes/pet-sales-report.routes";
 import trainingReportRoutes from "./routes/training-report.routes";
 import paymentReportRoutes from "./routes/payment-report.routes";
 import systemSummaryReportRoutes from "./routes/system-summary-report.routes";
+
 import connectDB from "./config/db";
-import cors from "cors";
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
 
+// CORS Configuration
 app.use(
   cors({
     origin: true,
@@ -33,6 +35,17 @@ app.use(
 
 app.use(express.json());
 
+// MongoDB Connection Middleware
+app.use(async (_req, _res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// API Routes
 app.use("/api", healthRoutes);
 app.use("/api/pets", petRoutes);
 app.use("/api/training-programs", trainingProgramRoutes);
@@ -51,11 +64,18 @@ app.use("/api/reports", trainingReportRoutes);
 app.use("/api/reports", paymentReportRoutes);
 app.use("/api/reports", systemSummaryReportRoutes);
 
-const startServer = async (): Promise<void> => {
-  await connectDB();
+export default app;
 
-  app.listen(PORT, "0.0.0.0", () => {
-  console.log(`PawPath server is running on port ${PORT}`);
-});
-};
-startServer();
+if (process.env.NODE_ENV !== "production") {
+  const PORT = Number(process.env.PORT) || 3000;
+
+  connectDB()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`PawPath server is running on port ${PORT}`);
+      });
+    })
+    .catch((error) => {
+      console.error("Failed to start server:", error);
+    });
+}
