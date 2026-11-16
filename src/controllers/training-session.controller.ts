@@ -181,55 +181,66 @@ export const createTrainingSession = async (
   }
 };
 
-
 export const getMyTrainingSessions = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const customerMongoId = req.user?.userId;
+    const mongoId = req.user?.userId;
     const role = req.user?.role;
 
-    if (role !== "CUSTOMER") {
+    if (role !== "TRAINER" && role !== "CUSTOMER") {
       res.status(403).json({
         success: false,
-        message: "Only customers can view their training history",
+        message: "You are not authorized to view training sessions",
       });
       return;
     }
 
-    const customer = await User.findById(customerMongoId);
+    const user = await User.findById(mongoId);
 
-    if (!customer || !customer.isActive || customer.role !== "CUSTOMER") {
+    if (!user || !user.isActive || user.role !== role) {
       res.status(403).json({
         success: false,
-        message: "Active customer account not found",
+        message: "Active user account not found",
       });
       return;
     }
 
-    const bookings = await TrainingBooking.find({
-      customerId: customer.userId,
-    }).select("bookingId");
+    let sessions;
 
-    const bookingIds = bookings.map((booking) => booking.bookingId);
+    if (role === "TRAINER") {
+      sessions = await TrainingSession.find({
+        trainerId: user.userId,
+      }).sort({ sessionDate: -1 });
+    } else {
+      
+      const bookings = await TrainingBooking.find({
+        customerId: user.userId,
+      }).select("bookingId");
 
-    const sessions = await TrainingSession.find({
-      bookingId: { $in: bookingIds },
-    }).sort({ sessionDate: -1 });
+      const bookingIds = bookings.map(
+        (booking) => booking.bookingId
+      );
+
+      sessions = await TrainingSession.find({
+        bookingId: { $in: bookingIds },
+      }).sort({ sessionDate: -1 });
+    }
 
     res.status(200).json({
       success: true,
-      message: "Training session history retrieved successfully",
+      message: "Training sessions retrieved successfully",
       count: sessions.length,
       data: sessions,
     });
   } catch (error) {
-    console.error("Get training session history error:", error);
+    console.error("Get training sessions error:", error);
 
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve training session history",
+      message: "Failed to retrieve training sessions",
     });
   }
 };
+
