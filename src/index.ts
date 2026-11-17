@@ -29,6 +29,7 @@ app.use(
   cors({
     origin: [
       "https://rad-final-project-frontend-kc13xzzhb-hashiniemalsha06-3367.vercel.app", 
+      "https://rad-final-project-frontend-pr511rw1s-hashiniemalsha06-3367.vercel.app",
       "http://localhost:5173", // Vite/React default port
       "http://localhost:3000"
     ],
