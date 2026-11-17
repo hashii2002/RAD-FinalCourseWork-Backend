@@ -1,9 +1,10 @@
 {
   "functions": {
-    "src/**/*": {
-      "includeFiles": "{node_modules/pdfkit/**/*,src/assets/**/*}"
+    "src/utils/index.ts": {
+      "includeFiles": "{node_modules/pdfkit/**/*,src/assets/pawpath-logo.jpg}"
     }
   }
 }
+
 
 
