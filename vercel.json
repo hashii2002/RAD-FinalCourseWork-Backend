@@ -1,7 +1,7 @@
 {
   "functions": {
     "src/index.ts": {
-      "includeFiles": "node_modules/pdfkit/**/*"
+      "includeFiles": "{node_modules/pdfkit/js/standard-fonts/**/*,src/assets/pawpath-logo.jpg}"
     }
   }
 }

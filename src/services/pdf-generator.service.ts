@@ -309,10 +309,6 @@ export const generatePDF = (
   title: string,
   content: string[]
 ): void => {
-  if (!fs.existsSync(LOGO_PATH)) {
-    throw new Error("PawPath logo image was not found.");
-  }
-
   const doc = new PDFDocument({
     size: "A4",
     margins: {
