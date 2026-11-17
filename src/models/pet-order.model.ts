@@ -1,4 +1,3 @@
-
 import { Schema, model } from "mongoose";
 
 export interface IPetOrder {
@@ -10,6 +9,9 @@ export interface IPetOrder {
   customerPhone: string;
   message?: string;
   status: "PENDING" | "CONTACTED" | "APPROVED" | "REJECTED" | "CANCELLED";
+
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const petOrderSchema = new Schema<IPetOrder>(

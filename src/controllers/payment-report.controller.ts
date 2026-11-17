@@ -1,21 +1,14 @@
 import { Request, Response } from "express";
+
 import Payment from "../models/payment.model";
 import User from "../models/user.model";
-import { generatePDF } from "../services/pdf-generator.service";
-
-const formatCurrency = (amount: number): string => {
-  return `LKR ${amount.toLocaleString("en-LK", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-};
 
 export const generatePaymentReport = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-
+    // Admin Authorization
     if (req.user?.role !== "ADMIN") {
       res.status(403).json({
         success: false,
@@ -34,27 +27,12 @@ export const generatePaymentReport = async (
       return;
     }
 
+    // Get All Payment Records
     const payments = await Payment.find().sort({
       createdAt: -1,
     });
 
-    if (payments.length === 0) {
-      generatePDF(
-        res,
-        "PawPath-Payment-Report.pdf",
-        "Payment Management Report",
-        [
-          "## Payment Summary",
-          "Total Payment Records: 0",
-          "Total Collected Revenue: LKR 0.00",
-          "Outstanding Balance: LKR 0.00",
-          "",
-          "No payment records were found.",
-        ]
-      );
-      return;
-    }
-
+    // Get Customer Details
     const customerIds = [
       ...new Set(payments.map((payment) => payment.customerId)),
     ];
@@ -64,12 +42,10 @@ export const generatePaymentReport = async (
     });
 
     const customerMap = new Map(
-      customers.map((customer) => [
-        customer.userId,
-        customer,
-      ])
+      customers.map((customer) => [customer.userId, customer])
     );
 
+    // Payment Summary
     const summary = {
       total: payments.length,
       paid: 0,
@@ -78,6 +54,7 @@ export const generatePaymentReport = async (
       refunded: 0,
     };
 
+    // Financial Summary
     let totalPetSalesCollected = 0;
     let totalTrainingFeesCollected = 0;
     let totalOutstandingBalance = 0;
@@ -120,84 +97,73 @@ export const generatePaymentReport = async (
     const totalCollectedRevenue =
       totalPetSalesCollected + totalTrainingFeesCollected;
 
-    const content: string[] = [];
-
-    content.push("## Payment Summary");
-    content.push(`Total Payment Records: ${summary.total}`);
-    content.push(`Paid Payments: ${summary.paid}`);
-    content.push(`Partially Paid Payments: ${summary.partiallyPaid}`);
-    content.push(`Unpaid Payments: ${summary.unpaid}`);
-    content.push(`Refunded Payments: ${summary.refunded}`);
-    content.push("");
-    content.push("## Financial Summary");
-    content.push(`Pet Sales Payments Collected: ${formatCurrency( totalPetSalesCollected)}` );
-    content.push( `Training Fees Collected: ${formatCurrency( totalTrainingFeesCollected)}`);
-    content.push(`Total Collected Revenue: ${formatCurrency( totalCollectedRevenue)}`);
-    content.push(`Total Outstanding Balance: ${formatCurrency( totalOutstandingBalance)}`);
-    content.push("");
-    content.push("## Payment Details");
-
-    payments.forEach((payment, index) => {
+    // Prepare Payment Details
+    const paymentDetails = payments.map((payment) => {
       const customer = customerMap.get(payment.customerId);
 
-      const paymentDate = (payment as any).createdAt
-        ? new Date((payment as any).createdAt).toLocaleDateString()
-        : "Not Available";
+      return {
+        paymentId: payment.paymentId,
+        paymentType: payment.paymentType,
+        referenceId: payment.referenceId,
 
-      content.push("");
-      content.push(`Payment ${index + 1}: ${payment.paymentId}`);
+        customerId: payment.customerId,
+        customerName: customer?.name || "Not Available",
 
-      content.push(`Payment Type: ${payment.paymentType}`);
-      content.push(`Reference ID: ${payment.referenceId}`);
+        paymentDate: payment.createdAt,
 
-      content.push(
-        `Customer: ${customer?.name || "Not Available"}`
-      );
+        totalAmount: Number(payment.totalAmount || 0),
+        discount: Number(payment.discount || 0),
+        finalAmount: Number(payment.finalAmount || 0),
+        paidAmount: Number(payment.paidAmount || 0),
+        balance: Number(payment.balance || 0),
 
-      content.push(`Customer ID: ${payment.customerId}`);
-      content.push(`Payment Date: ${paymentDate}`);
+        status: payment.status,
 
-      content.push(
-        `Total Amount: ${formatCurrency(Number(payment.totalAmount || 0))}`
-      );
-
-      content.push(
-        `Discount: ${formatCurrency(Number(payment.discount || 0))}`
-      );
-
-      content.push(
-        `Final Amount: ${formatCurrency(Number(payment.finalAmount || 0))}`
-      );
-
-      content.push(
-        `Paid Amount: ${formatCurrency(Number(payment.paidAmount || 0))}`
-      );
-
-      content.push(
-        `Outstanding Balance: ${formatCurrency(Number(payment.balance || 0))}`
-      );
-
-      content.push(`Payment Status: ${payment.status}`);
+        transactions: payment.transactions.map((transaction) => ({
+          transactionId: transaction.transactionId,
+          amount: Number(transaction.amount || 0),
+          paymentMethod: transaction.paymentMethod,
+          paymentDate: transaction.paymentDate,
+          referenceNumber: transaction.referenceNumber || "",
+          receivedBy: transaction.receivedBy,
+          notes: transaction.notes || "",
+          refundedBy: transaction.refundedBy || "",
+          refundedAt: transaction.refundedAt,
+          refundReason: transaction.refundReason || "",
+        })),
+      };
     });
 
-    content.push("");
-    content.push("## Report Information");
-    content.push("Report Type: Payment Management Report");
-    content.push("Generated By: PawPath Administrator");
+    res.status(200).json({
+      success: true,
+      message: "Payment report data retrieved successfully",
 
-    generatePDF(
-      res,
-      "PawPath-Payment-Report.pdf",
-      "Payment Management Report",
-      content
-    );
+      data: {
+        summary,
+
+        financialSummary: {
+          totalPetSalesCollected,
+          totalTrainingFeesCollected,
+          totalCollectedRevenue,
+          totalOutstandingBalance,
+        },
+
+        payments: paymentDetails,
+
+        reportInfo: {
+          reportType: "Payment Management Report",
+          generatedBy: "PawPath Administrator",
+          generatedAt: new Date(),
+        },
+      },
+    });
   } catch (error) {
     console.error("Generate payment report error:", error);
 
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
-        message: "Failed to generate payment report",
+        message: "Failed to retrieve payment report data",
       });
     }
   }

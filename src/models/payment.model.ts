@@ -37,6 +37,8 @@ export interface IPayment {
   balance: number;
   status: PaymentStatus;
   transactions: IPaymentTransaction[];
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const transactionSchema = new Schema<IPaymentTransaction>(
