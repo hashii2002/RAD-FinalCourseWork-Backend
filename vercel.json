@@ -11,5 +11,6 @@
       "source": "/(.*)",
       "destination": "src/utils/index.ts"
     }
-  ]
+  ],
+  "trailingSlash": false
 }
